@@ -187,15 +187,11 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
-        
-        const light = new THREE.PointLight(0xffffff, 120);
-        light.position.set(5, 5, 5);
-        scene.add(light);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
         // Global Timers & Cooldowns
         let lastAudioToggle = 0; 
         const COOLDOWN_MS = 1500; 
+        let isGrabbing = false; // NEW: Tracks the Black Hole state
 
         // --- THE "VIBE DROP" ENGINE ---
         const fallingSpheres = [];
@@ -203,46 +199,39 @@
         let lastDropTime = 0; 
 
         function spawnVibeSpheres() {
-            // Garbage Collection: Delete old shapes to prevent lagging
-            if (fallingSpheres.length > 300) {
-                const removed = fallingSpheres.splice(0, 75); 
-                removed.forEach(oldShape => {
-                    scene.remove(oldShape);
-                    oldShape.geometry.dispose();
-                    oldShape.material.dispose();
-                });
-            }
+            // 1. SAFETY WIPE: Clear the old screen
+            fallingSpheres.forEach(oldShape => {
+                scene.remove(oldShape);
+                oldShape.geometry.dispose();
+                oldShape.material.dispose();
+            });
+            fallingSpheres.length = 0; 
 
             const colors = [0x4285F4, 0xEA4335, 0xFBBC04, 0x34A853, 0xFF00FF, 0x00FFFF]; 
+            const totalCircles = 450; 
         
-            for(let i = 0; i < 75; i++) { 
-                // 32 segments makes it perfectly round 2D circle
-                const geo = new THREE.CircleGeometry(Math.random() * 0.4 + 0.2, 32); 
+            for(let i = 0; i < totalCircles; i++) { 
+                const geo = new THREE.CircleGeometry(Math.random() * 0.8 + 0.4, 32); 
                 
-                // Washed colors mixing
                 const baseColor = new THREE.Color(colors[Math.floor(Math.random() * colors.length)]);
-                baseColor.lerp(new THREE.Color(0x888888), 0.65); 
+                baseColor.lerp(new THREE.Color(0x888888), 0.85); 
 
-                const mat = new THREE.MeshStandardMaterial({ 
+                const mat = new THREE.MeshBasicMaterial({ 
                     color: baseColor,
-                    roughness: 0.4, 
-                    metalness: 0.2,
-                    side: THREE.DoubleSide // Visible from both sides
+                    side: THREE.DoubleSide 
                 });
                 
                 const shape = new THREE.Mesh(geo, mat);
                 
-                // Z-Offset to prevent flickering (Z-fighting)
                 const zOffset = (Math.random() - 0.5) * 0.2;
-                shape.position.set((Math.random() - 0.5) * 12, 5 + Math.random() * 4, zOffset);
+                shape.position.set((Math.random() - 0.5) * 18, 8 + Math.random() * 10, zOffset);
                 
-                // Fake Stacking Physics
-                const currentCount = fallingSpheres.length + i;
-                const layerHeight = Math.floor(currentCount / 12) * 0.35; 
-                const myFloorLevel = -3 + layerHeight + (Math.random() * 0.15); 
+                const layerHeight = Math.floor(i / 20) * 0.45; 
+                const myFloorLevel = -4.5 + layerHeight + (Math.random() * 0.15); 
 
                 shape.userData = {
-                    velocityY: -(Math.random() * 0.2 + 0.1), 
+                    state: 'falling', // NEW: The default state
+                    velocityY: -(Math.random() * 0.2 + 0.15),
                     floorY: myFloorLevel 
                 };
                 
@@ -273,8 +262,32 @@
             const now = Date.now();
             const canToggle = (now - lastAudioToggle) > COOLDOWN_MS;
 
+            // --- THE BLACK HOLE (GRAB & EXPLODE) ---
+            const currentlyGrabbing = allFingersCurled && !isThumbsUp && !isThumbsDown;
+
+            if (currentlyGrabbing && !isGrabbing) {
+                isGrabbing = true; 
+                hint.innerText = "✊ SINGULARITY... (Hold Fist)";
+                hint.style.color = "#FBBC04"; 
+            } 
+            else if (!currentlyGrabbing && isGrabbing) {
+                // The moment you open your hand, trigger the explosion!
+                isGrabbing = false;
+                lastDropTime = now; // Put Vibe Drop on cooldown so it doesn't accidentally trigger
+                
+                hint.innerText = "💥 BOOM! (Released)";
+                hint.style.color = "#FF00FF";
+                
+                // Assign a violent outward velocity to every circle
+                fallingSpheres.forEach(s => {
+                    s.userData.state = 'exploding';
+                    s.userData.velX = (Math.random() - 0.5) * 2.0; // Fly left/right
+                    s.userData.velY = (Math.random() - 0.5) * 2.0; // Fly up/down
+                });
+            }
+
             // --- AUDIO CONTROLS ---
-            if (isThumbsUp && canToggle) {
+            else if (isThumbsUp && canToggle) {
                 if (player.paused) player.play();
                 lastAudioToggle = now; 
                 hint.innerText = "▶️ MUSIC PLAYING (Thumbs Up)";
@@ -286,7 +299,7 @@
                 hint.innerText = "⏸️ MUSIC PAUSED (Thumbs Down)";
                 hint.style.color = "#EA4335"; 
             } 
-            else {
+            else if (!isGrabbing) {
                 if (!canToggle) {
                     hint.innerText = "⏳ Processing...";
                     hint.style.color = "#FBBC04"; 
@@ -386,16 +399,40 @@
             const pulse = 1 + Math.sin(time) * 0.1;
             document.getElementById('val-pulse').innerText = pulse.toFixed(3);
 
-            // Gravity Engine (Cleaned up: No more rotation math!)
+            // --- UPGRADED PHYSICS ENGINE ---
             for (let i = fallingSpheres.length - 1; i >= 0; i--) {
                 let s = fallingSpheres[i];
                 
-                s.position.y += s.userData.velocityY;
-                
-                // Custom Stacking Floor
-                if (s.position.y < s.userData.floorY) {
-                    s.position.y = s.userData.floorY;
-                    s.userData.velocityY = 0; 
+                // 1. THE SUCTION OVERRIDE: If you make a fist, pull EVERYTHING to the center
+                if (isGrabbing) {
+                    s.userData.state = 'grabbed';
+                }
+
+                if (s.userData.state === 'falling') {
+                    // Normal falling logic
+                    s.position.y += s.userData.velocityY;
+                    if (s.position.y < s.userData.floorY) {
+                        s.position.y = s.userData.floorY;
+                        s.userData.velocityY = 0; 
+                    }
+                } 
+                else if (s.userData.state === 'grabbed') {
+                    // Sucks them dynamically toward the center (X = 0, Y = 4)
+                    s.position.x += (0 - s.position.x) * 0.1;
+                    s.position.y += (4 - s.position.y) * 0.1;
+                } 
+                else if (s.userData.state === 'exploding') {
+                    // Apply the violent explosion velocity
+                    s.position.x += s.userData.velX;
+                    s.position.y += s.userData.velY;
+                    
+                    // GARBAGE COLLECTION: Delete them permanently once they fly off screen
+                    if (s.position.x > 25 || s.position.x < -25 || s.position.y > 20 || s.position.y < -10) {
+                        scene.remove(s);
+                        s.geometry.dispose();
+                        s.material.dispose();
+                        fallingSpheres.splice(i, 1);
+                    }
                 }
             }
 
