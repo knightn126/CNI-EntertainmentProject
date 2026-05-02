@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Code Next | Spatial Studio</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <style>
+        :root {
+            --google-blue: #4285F4;
+            --google-red: #EA4335;
+            --google-yellow: #FBBC04;
+            --google-green: #34A853;
+            --brand-dark: #0a0a0a;
+            --ui-glass: rgba(255, 255, 255, 0.03);
+            --ui-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--brand-dark);
+            overflow: hidden;
+            font-family: 'Google Sans', sans-serif;
+        }
+
+        #webcam-monitor {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 200px;
+            z-index: 100;
+            border: 1px solid var(--ui-border);
+            border-radius: 16px;
+            transform: scaleX(-1);
+            display: none;
+        }
+
+        #data-monitor {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 240px;
+            padding: 15px;
+            background: var(--ui-glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--ui-border);
+            border-radius: 12px;
+            color: #aaa;
+            font-family: monospace;
+            font-size: 10px;
+            z-index: 100;
+            display: none;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .data-val { color: var(--google-blue); }
+
+        #ui-layer {
+            position: absolute;
+            bottom: 40px;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            z-index: 10;
+            pointer-events: none;
+            display: none;
+        }
+
+        .status-pill {
+            display: inline-block;
+            background: var(--ui-glass);
+            border: 1px solid var(--ui-border);
+            backdrop-filter: blur(10px);
+            padding: 10px 24px;
+            border-radius: 100px;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        #permission-gate {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 1s ease;
+        }
+
+        .google-logo {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            font-size: 32px;
+            font-weight: 500;
+        }
+
+        button {
+            background: var(--google-blue);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            min-width: 220px;
+        }
+
+        .secondary-btn {
+            background: transparent;
+            color: #666;
+            font-size: 11px;
+            text-decoration: underline;
+            border: none;
+            min-width: auto;
+            margin-top: 15px;
+        }
+
+        .hidden { display: none !important; opacity: 0; }
+    </style>
+</head>
+
+<body>
+
+    <div id="permission-gate">
+        <div class="google-logo">
+            <span style="color: #4285F4">G</span><span style="color: #EA4335">o</span><span
+                style="color: #FBBC04">o</span><span style="color: #4285F4">g</span><span
+                style="color: #34A853">l</span><span style="color: #EA4335">e</span>
+            <span style="color: #fff; margin-left: 10px; font-weight: 300;">| Code Next Inglewood</span>
+        </div>
+        <button id="start-btn">Launch Spatial Studio</button>
+        <button id="copy-url-btn" class="secondary-btn">Open in Chrome for full access</button>
+    </div>
+
+    <div id="data-monitor">
+        <div style="color: white; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px;">ENGINE TELEMETRY</div>
+        <div class="data-row"><span>Confidence</span><span class="data-val" id="val-conf">0.00</span></div>
+        <div class="data-row"><span>Palm X</span><span class="data-val" id="val-x">0.00</span></div>
+        <div class="data-row"><span>Thumb Ext.</span><span class="data-val" id="val-thumb">0.00</span></div>
+        <div class="data-row"><span>BPM Pulse</span><span class="data-val" id="val-pulse">0.00</span></div>
+    </div>
+
+    <video id="webcam-monitor" autoplay playsinline></video>
+    
+    <div id="ui-layer">
+        <audio id="audio-player" src="music/lutherS3.mp3" controls style="margin-bottom: 15px; border-radius: 50px; opacity: 0.8;"></audio>
+        <br>
+        <div class="status-pill" id="gesture-hint">Initializing...</div>
+    </div>
+
+    <script>
+        // 1. BASIC SCENE SETUP
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x060606);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        const light = new THREE.PointLight(0xffffff, 120);
+        light.position.set(5, 5, 5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+        //Timer to prevent accidental rapid-fire triggers
+        let lastAudioToggle = 0; 
+        const COOLDOWN_MS = 1500; // 1.5 seconds of cooldown
+
+        // 2. NEW GESTURE LOGIC (AUDIO CONTROLS)
+        function evaluateGestures(hand) {
+            // Identify if the main fingers are curled into a fist
+            const indexCurled = hand[8].y > hand[6].y;
+            const middleCurled = hand[12].y > hand[10].y;
+            const ringCurled = hand[16].y > hand[14].y;
+            const pinkyCurled = hand[20].y > hand[18].y;
+            
+            const allFingersCurled = indexCurled && middleCurled && ringCurled && pinkyCurled;
+
+            // Define Thumb States
+            const isThumbsUp = hand[4].y < (hand[3].y - 0.08) && allFingersCurled;
+            const isThumbsDown = hand[4].y > (hand[3].y + 0.08) && allFingersCurled;
+
+            const hint = document.getElementById('gesture-hint');
+            const player = document.getElementById('audio-player');
+
+            // --- MISSING CODE ADDED HERE ---
+            const now = Date.now();
+            const canToggle = (now - lastAudioToggle) > COOLDOWN_MS;
+            // -------------------------------
+
+            if (isThumbsUp && canToggle) {
+                if (player.paused) {
+                    player.play();
+                }
+                lastAudioToggle = now; // Reset the cooldown timer
+                hint.innerText = "▶️ MUSIC PLAYING (Thumbs Up)";
+                hint.style.color = "#34A853"; 
+            } 
+            else if (isThumbsDown && canToggle) {
+                if (!player.paused) {
+                    player.pause();
+                }
+                lastAudioToggle = now; // Reset the cooldown timer
+                hint.innerText = "⏸️ MUSIC PAUSED (Thumbs Down)";
+                hint.style.color = "#EA4335"; 
+            } 
+            else {
+                // UI Feedback: Let the user know if they are in cooldown
+                if (!canToggle) {
+                    hint.innerText = "⏳ Processing...";
+                    hint.style.color = "#FBBC04"; // Google Yellow for waiting
+                } else if (!player.paused) {
+                    hint.innerText = "Listening: 'Luther' by Kendrick Lamar";
+                    hint.style.color = "#ffffff";
+                } else {
+                    hint.innerText = "System Ready: Thumbs Up to Play";
+                    hint.style.color = "#aaaaaa";
+                }
+            }
+
+            // Update telemetry
+            document.getElementById('val-x').innerText = (0.5 - hand[9].x).toFixed(2);
+            document.getElementById('val-thumb').innerText = hand[4].y.toFixed(2);
+        }
+
+        // 3. MEDIAPIPE SENSORS
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+
+        hands.onResults(res => {
+            if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+                evaluateGestures(res.multiHandLandmarks[0]);
+                document.getElementById('val-conf').innerText = "0.98";
+            } else {
+                document.getElementById('gesture-hint').innerText = "Sensors Active // Show Your Hand To Camera";
+                document.getElementById('val-conf').innerText = "0.00";
+            }
+        });
+
+        // 4. WEBCAM & UI INITIALIZATION
+        const video = document.getElementById('webcam-monitor');
+        const startBtn = document.getElementById('start-btn');
+        const gate = document.getElementById('permission-gate');
+
+        startBtn.addEventListener('click', () => {
+            startBtn.innerText = "Powering Up Engines...";
+            startBtn.disabled = true;
+
+            const cam = new Camera(video, {
+                onFrame: async () => { await hands.send({ image: video }); },
+                width: 1280, height: 720
+            });
+
+            cam.start().then(() => {
+                gate.style.opacity = '0';
+                setTimeout(() => {
+                    gate.classList.add('hidden');
+                    video.style.display = 'block';
+                    document.getElementById('ui-layer').style.display = 'block';
+                    document.getElementById('data-monitor').style.display = 'block';
+                }, 1000);
+            }).catch(err => { console.error("Hardware Error:", err); });
+        });
+
+        document.getElementById('copy-url-btn').onclick = () => {
+            navigator.clipboard.writeText(window.location.href);
+            document.getElementById('copy-url-btn').innerText = "URL COPIED";
+        };
+
+        // 5. THE ANIMATION LOOP
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.02; 
+            const pulse = 1 + Math.sin(time) * 0.1;
+            document.getElementById('val-pulse').innerText = pulse.toFixed(3);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Responsive Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>
