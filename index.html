@@ -76,6 +76,15 @@
             display: none;
         }
 
+        #song-timer {
+            font-size: 48px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 15px;
+            text-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            font-variant-numeric: tabular-nums; 
+        }
+
         .status-pill {
             display: inline-block;
             background: var(--ui-glass);
@@ -161,6 +170,7 @@
     <video id="webcam-monitor" autoplay playsinline></video>
     
     <div id="ui-layer">
+        <div id="song-timer">0.0s</div>
         <audio id="audio-player" src="music/lutherS3.mp3" controls style="margin-bottom: 15px; border-radius: 50px; opacity: 0.8;"></audio>
         <br>
         <div class="status-pill" id="gesture-hint">Initializing...</div>
@@ -183,53 +193,103 @@
         scene.add(light);
         scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
-        //Timer to prevent accidental rapid-fire triggers
+        // Global Timers & Cooldowns
         let lastAudioToggle = 0; 
-        const COOLDOWN_MS = 1500; // 1.5 seconds of cooldown
+        const COOLDOWN_MS = 1500; 
 
-        // 2. NEW GESTURE LOGIC (AUDIO CONTROLS)
+        // --- THE "VIBE DROP" ENGINE ---
+        const fallingSpheres = [];
+        let lastPalmY = 0; 
+        let lastDropTime = 0; 
+
+        function spawnVibeSpheres() {
+            // Garbage Collection: Delete old shapes to prevent lagging
+            if (fallingSpheres.length > 300) {
+                const removed = fallingSpheres.splice(0, 75); 
+                removed.forEach(oldShape => {
+                    scene.remove(oldShape);
+                    oldShape.geometry.dispose();
+                    oldShape.material.dispose();
+                });
+            }
+
+            const colors = [0x4285F4, 0xEA4335, 0xFBBC04, 0x34A853, 0xFF00FF, 0x00FFFF]; 
+        
+            for(let i = 0; i < 75; i++) { 
+                // 32 segments makes it perfectly round 2D circle
+                const geo = new THREE.CircleGeometry(Math.random() * 0.4 + 0.2, 32); 
+                
+                // Washed colors mixing
+                const baseColor = new THREE.Color(colors[Math.floor(Math.random() * colors.length)]);
+                baseColor.lerp(new THREE.Color(0x888888), 0.65); 
+
+                const mat = new THREE.MeshStandardMaterial({ 
+                    color: baseColor,
+                    roughness: 0.4, 
+                    metalness: 0.2,
+                    side: THREE.DoubleSide // Visible from both sides
+                });
+                
+                const shape = new THREE.Mesh(geo, mat);
+                
+                // Z-Offset to prevent flickering (Z-fighting)
+                const zOffset = (Math.random() - 0.5) * 0.2;
+                shape.position.set((Math.random() - 0.5) * 12, 5 + Math.random() * 4, zOffset);
+                
+                // Fake Stacking Physics
+                const currentCount = fallingSpheres.length + i;
+                const layerHeight = Math.floor(currentCount / 12) * 0.35; 
+                const myFloorLevel = -3 + layerHeight + (Math.random() * 0.15); 
+
+                shape.userData = {
+                    velocityY: -(Math.random() * 0.2 + 0.1), 
+                    floorY: myFloorLevel 
+                };
+                
+                scene.add(shape);
+                fallingSpheres.push(shape);
+            }
+        }
+
+        // Distance helper function
+        function getDistance(point1, point2) {
+            return Math.hypot(point1.x - point2.x, point1.y - point2.y);
+        }
+
+        // 2. GESTURE LOGIC & AUDIO CONTROLS
         function evaluateGestures(hand) {
-            // Identify if the main fingers are curled into a fist
             const indexCurled = hand[8].y > hand[6].y;
             const middleCurled = hand[12].y > hand[10].y;
             const ringCurled = hand[16].y > hand[14].y;
             const pinkyCurled = hand[20].y > hand[18].y;
-            
             const allFingersCurled = indexCurled && middleCurled && ringCurled && pinkyCurled;
 
-            // Define Thumb States
             const isThumbsUp = hand[4].y < (hand[3].y - 0.08) && allFingersCurled;
             const isThumbsDown = hand[4].y > (hand[3].y + 0.08) && allFingersCurled;
 
             const hint = document.getElementById('gesture-hint');
             const player = document.getElementById('audio-player');
 
-            // --- MISSING CODE ADDED HERE ---
             const now = Date.now();
             const canToggle = (now - lastAudioToggle) > COOLDOWN_MS;
-            // -------------------------------
 
+            // --- AUDIO CONTROLS ---
             if (isThumbsUp && canToggle) {
-                if (player.paused) {
-                    player.play();
-                }
-                lastAudioToggle = now; // Reset the cooldown timer
+                if (player.paused) player.play();
+                lastAudioToggle = now; 
                 hint.innerText = "▶️ MUSIC PLAYING (Thumbs Up)";
                 hint.style.color = "#34A853"; 
             } 
             else if (isThumbsDown && canToggle) {
-                if (!player.paused) {
-                    player.pause();
-                }
-                lastAudioToggle = now; // Reset the cooldown timer
+                if (!player.paused) player.pause();
+                lastAudioToggle = now; 
                 hint.innerText = "⏸️ MUSIC PAUSED (Thumbs Down)";
                 hint.style.color = "#EA4335"; 
             } 
             else {
-                // UI Feedback: Let the user know if they are in cooldown
                 if (!canToggle) {
                     hint.innerText = "⏳ Processing...";
-                    hint.style.color = "#FBBC04"; // Google Yellow for waiting
+                    hint.style.color = "#FBBC04"; 
                 } else if (!player.paused) {
                     hint.innerText = "Listening: 'Luther' by Kendrick Lamar";
                     hint.style.color = "#ffffff";
@@ -238,6 +298,27 @@
                     hint.style.color = "#aaaaaa";
                 }
             }
+
+            // --- VIBE DROP LOGIC ---
+            const wrist = hand[0];
+            const indexExtended = getDistance(hand[8], wrist) > getDistance(hand[6], wrist);
+            const middleExtended = getDistance(hand[12], wrist) > getDistance(hand[10], wrist);
+            const ringExtended = getDistance(hand[16], wrist) > getDistance(hand[14], wrist);
+            const pinkyExtended = getDistance(hand[20], wrist) > getDistance(hand[18], wrist);
+
+            const isHandFlat = indexExtended && middleExtended && ringExtended && pinkyExtended;
+
+            const currentPalmY = hand[9].y;
+            const swipeVelocity = currentPalmY - lastPalmY; 
+        
+            if (isHandFlat && swipeVelocity > 0.03 && (now - lastDropTime) > 1000) {
+                spawnVibeSpheres();
+                lastDropTime = now;
+                hint.innerText = "✨ THE VIBE DROP ✨";
+                hint.style.color = "#FF00FF";
+            }
+
+            lastPalmY = currentPalmY;
 
             // Update telemetry
             document.getElementById('val-x').innerText = (0.5 - hand[9].x).toFixed(2);
@@ -288,13 +369,42 @@
             document.getElementById('copy-url-btn').innerText = "URL COPIED";
         };
 
+        // --- AUDIO RESTART LOGIC ---
+        document.getElementById('audio-player').addEventListener('ended', (e) => {
+            e.target.currentTime = 0; 
+            document.getElementById('gesture-hint').innerText = "Track Ended. Thumbs Up to Restart!";
+            document.getElementById('gesture-hint').style.color = "#aaaaaa";
+        });
+
         // 5. THE ANIMATION LOOP
         let time = 0;
         function animate() {
             requestAnimationFrame(animate);
+            
+            // Dashboard Pulse Telemetry
             time += 0.02; 
             const pulse = 1 + Math.sin(time) * 0.1;
             document.getElementById('val-pulse').innerText = pulse.toFixed(3);
+
+            // Gravity Engine (Cleaned up: No more rotation math!)
+            for (let i = fallingSpheres.length - 1; i >= 0; i--) {
+                let s = fallingSpheres[i];
+                
+                s.position.y += s.userData.velocityY;
+                
+                // Custom Stacking Floor
+                if (s.position.y < s.userData.floorY) {
+                    s.position.y = s.userData.floorY;
+                    s.userData.velocityY = 0; 
+                }
+            }
+
+            // --- STOPWATCH UPDATE ---
+            const player = document.getElementById('audio-player');
+            const timerDisplay = document.getElementById('song-timer');
+            
+            const currentSeconds = player.currentTime;
+            timerDisplay.innerText = currentSeconds.toFixed(1) + "s";
 
             renderer.render(scene, camera);
         }
