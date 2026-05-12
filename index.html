@@ -4,450 +4,280 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Code Next | Spatial Studio</title>
+    <title>Google Code Next | Spatial Studio Master</title>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
         :root {
+            /* Google Brand Palette */
             --google-blue: #4285F4;
             --google-red: #EA4335;
             --google-yellow: #FBBC04;
             --google-green: #34A853;
             --brand-dark: #0a0a0a;
-            --ui-glass: rgba(255, 255, 255, 0.03);
+            --ui-glass: rgba(255, 255, 255, 0.05);
             --ui-border: rgba(255, 255, 255, 0.1);
         }
 
-        body {
-            margin: 0;
-            background-color: var(--brand-dark);
-            overflow: hidden;
-            font-family: 'Google Sans', sans-serif;
-        }
+        body { margin: 0; background-color: var(--brand-dark); overflow: hidden; font-family: 'Google Sans', sans-serif; color: white; }
 
-        #webcam-monitor {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 200px;
-            z-index: 100;
-            border: 1px solid var(--ui-border);
-            border-radius: 16px;
-            transform: scaleX(-1);
-            display: none;
-        }
+        #permission-gate { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+        button { background: var(--google-blue); color: white; border: none; padding: 14px 32px; font-size: 14px; cursor: pointer; border-radius: 8px; font-weight: bold; }
 
-        #data-monitor {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 240px;
-            padding: 15px;
-            background: var(--ui-glass);
-            backdrop-filter: blur(15px);
-            border: 1px solid var(--ui-border);
-            border-radius: 12px;
-            color: #aaa;
-            font-family: monospace;
-            font-size: 10px;
-            z-index: 100;
-            display: none;
-        }
+        #webcam-monitor { position: absolute; top: 20px; left: 20px; width: 220px; z-index: 100; border: 1px solid var(--ui-border); border-radius: 12px; transform: scaleX(-1); display: none; }
 
-        .data-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-        }
+        /* The Team's Data Monitor */
+        #data-monitor { position: absolute; top: 20px; right: 20px; width: 250px; background: var(--ui-glass); backdrop-filter: blur(10px); border: 1px solid var(--ui-border); border-radius: 12px; padding: 20px; z-index: 100; display: none; font-size: 12px; }
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
+        .data-val { font-family: monospace; color: var(--google-yellow); }
 
-        .data-val { color: var(--google-blue); }
-
-        #ui-layer {
-            position: absolute;
-            bottom: 40px;
-            width: 100%;
-            text-align: center;
-            color: #fff;
-            z-index: 10;
-            pointer-events: none;
-            display: none;
-        }
-
-        #song-timer {
-            font-size: 48px;
-            font-weight: 700;
-            color: #ffffff;
-            margin-bottom: 15px;
-            text-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-            font-variant-numeric: tabular-nums; 
-        }
-
-        .status-pill {
-            display: inline-block;
-            background: var(--ui-glass);
-            border: 1px solid var(--ui-border);
-            backdrop-filter: blur(10px);
-            padding: 10px 24px;
-            border-radius: 100px;
-            font-size: 12px;
-            text-transform: uppercase;
-            font-weight: 500;
-        }
-
-        #permission-gate {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            transition: opacity 1s ease;
-        }
-
-        .google-logo {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 20px;
-            font-size: 32px;
-            font-weight: 500;
-        }
-
-        button {
-            background: var(--google-blue);
-            color: white;
-            border: none;
-            padding: 14px 32px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            border-radius: 8px;
-            min-width: 220px;
-        }
-
-        .secondary-btn {
-            background: transparent;
-            color: #666;
-            font-size: 11px;
-            text-decoration: underline;
-            border: none;
-            min-width: auto;
-            margin-top: 15px;
-        }
-
-        .hidden { display: none !important; opacity: 0; }
+        #ui-layer { position: absolute; bottom: 40px; width: 100%; text-align: center; z-index: 10; pointer-events: none; display: none; }
+        #song-timer { font-size: 48px; font-weight: 700; margin-bottom: 15px; font-variant-numeric: tabular-nums; }
+        .status-pill { display: inline-block; background: var(--ui-glass); border: 1px solid var(--ui-border); backdrop-filter: blur(10px); padding: 10px 24px; border-radius: 100px; font-size: 12px; text-transform: uppercase; }
     </style>
 </head>
 
 <body>
 
     <div id="permission-gate">
-        <div class="google-logo">
-            <span style="color: #4285F4">G</span><span style="color: #EA4335">o</span><span
-                style="color: #FBBC04">o</span><span style="color: #4285F4">g</span><span
-                style="color: #34A853">l</span><span style="color: #EA4335">e</span>
-            <span style="color: #fff; margin-left: 10px; font-weight: 300;">| Code Next Inglewood</span>
-        </div>
-        <button id="start-btn">Launch Spatial Studio</button>
-        <button id="copy-url-btn" class="secondary-btn">Open in Chrome for full access</button>
-    </div>
-
-    <div id="data-monitor">
-        <div style="color: white; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px;">ENGINE TELEMETRY</div>
-        <div class="data-row"><span>Confidence</span><span class="data-val" id="val-conf">0.00</span></div>
-        <div class="data-row"><span>Palm X</span><span class="data-val" id="val-x">0.00</span></div>
-        <div class="data-row"><span>Thumb Ext.</span><span class="data-val" id="val-thumb">0.00</span></div>
-        <div class="data-row"><span>BPM Pulse</span><span class="data-val" id="val-pulse">0.00</span></div>
+        <h2 style="font-weight: 300;">LUTHER MASTER ENGINE</h2>
+        <button id="start-btn">Launch System</button>
     </div>
 
     <video id="webcam-monitor" autoplay playsinline></video>
-    
+
+    <div id="data-monitor">
+        <div style="font-weight: bold; margin-bottom: 15px; color: var(--google-blue);">ENGINE TELEMETRY</div>
+        <div class="data-row"><span>Pulse:</span> <span class="data-val" id="val-pulse">0.00</span></div>
+        <div class="data-row"><span>Hand Conf:</span> <span class="data-val" id="val-conf">0%</span></div>
+        <div class="data-row"><span>Active Gesture:</span> <span class="data-val" id="val-state" style="color: var(--google-green);">Scanning...</span></div>
+        <button id="copy-url-btn" style="width: 100%; margin-top: 15px; padding: 8px; font-size: 10px; pointer-events: auto;">COPY PROJECT URL</button>
+    </div>
+
     <div id="ui-layer">
         <div id="song-timer">0.0s</div>
-        <audio id="audio-player" src="music/lutherS3.mp3" controls style="margin-bottom: 15px; border-radius: 50px; opacity: 0.8;"></audio>
+        <audio id="audio-player" src="music/lutherS3.mp3" controls style="margin-bottom: 15px; border-radius: 50px; pointer-events: auto;"></audio>
         <br>
-        <div class="status-pill" id="gesture-hint">Initializing...</div>
+        <div class="status-pill" id="gesture-hint">Waiting for input...</div>
     </div>
 
     <script>
-        // 1. BASIC SCENE SETUP
+        // SPRINT 2: BUILD THE UNIVERSE
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x060606);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 5;
-        
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // Global Timers & Cooldowns
-        let lastAudioToggle = 0; 
-        const COOLDOWN_MS = 1500; 
-        let isGrabbing = false; // NEW: Tracks the Black Hole state
+        // SPRINT 3: 3D ASSETS (Team's Master List)
+        const assets = {
+            earth: new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), new THREE.MeshBasicMaterial({ color: 0x333333 })),
+            enemies: new THREE.Group(),
+            flower: new THREE.Group()
+        };
 
-        // --- THE "VIBE DROP" ENGINE ---
+        // Setup Enemies (Pablo/Aaliyah)
+        for(let i=0; i<5; i++) {
+            const e = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.2), new THREE.MeshBasicMaterial({color: 0xEA4335}));
+            e.position.set((i-2)*1.5, 2, 0);
+            assets.enemies.add(e);
+        }
+
+        // Setup Flower (Annuria)
+        assets.flower.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5), new THREE.MeshBasicMaterial({color: 0x34A853})));
+        const petal = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), new THREE.MeshBasicMaterial({color: 0xFBBC04}));
+        petal.position.y = 0.8;
+        assets.flower.add(petal);
+
+        // Add all to scene hidden
+        Object.values(assets).forEach(obj => { obj.visible = false; scene.add(obj); });
+
+        // Nate's Physics Data
+        let isGrabbing = false;
+        let lastDropTime = 0;
+        let lastPalmY = 0;
         const fallingSpheres = [];
-        let lastPalmY = 0; 
-        let lastDropTime = 0; 
 
-        function spawnVibeSpheres() {
-            // 1. SAFETY WIPE: Clear the old screen
-            fallingSpheres.forEach(oldShape => {
-                scene.remove(oldShape);
-                oldShape.geometry.dispose();
-                oldShape.material.dispose();
-            });
-            fallingSpheres.length = 0; 
+        // Efficient UI Caching
+        const uiState = document.getElementById('val-state');
+        const uiConf = document.getElementById('val-conf');
+        const hintText = document.getElementById('gesture-hint');
 
-            const colors = [0x4285F4, 0xEA4335, 0xFBBC04, 0x34A853, 0xFF00FF, 0x00FFFF]; 
-            const totalCircles = 450; 
-        
-            for(let i = 0; i < totalCircles; i++) { 
-                const geo = new THREE.CircleGeometry(Math.random() * 0.8 + 0.4, 32); 
-                
-                const baseColor = new THREE.Color(colors[Math.floor(Math.random() * colors.length)]);
-                baseColor.lerp(new THREE.Color(0x888888), 0.85); 
-
-                const mat = new THREE.MeshBasicMaterial({ 
-                    color: baseColor,
-                    side: THREE.DoubleSide 
-                });
-                
-                const shape = new THREE.Mesh(geo, mat);
-                
-                const zOffset = (Math.random() - 0.5) * 0.2;
-                shape.position.set((Math.random() - 0.5) * 18, 8 + Math.random() * 10, zOffset);
-                
-                const layerHeight = Math.floor(i / 20) * 0.45; 
-                const myFloorLevel = -4.5 + layerHeight + (Math.random() * 0.15); 
-
-                shape.userData = {
-                    state: 'falling', // NEW: The default state
-                    velocityY: -(Math.random() * 0.2 + 0.15),
-                    floorY: myFloorLevel 
-                };
-                
-                scene.add(shape);
-                fallingSpheres.push(shape);
-            }
-        }
-
-        // Distance helper function
-        function getDistance(point1, point2) {
-            return Math.hypot(point1.x - point2.x, point1.y - point2.y);
-        }
-
-        // 2. GESTURE LOGIC & AUDIO CONTROLS
-        function evaluateGestures(hand) {
-            const indexCurled = hand[8].y > hand[6].y;
-            const middleCurled = hand[12].y > hand[10].y;
-            const ringCurled = hand[16].y > hand[14].y;
-            const pinkyCurled = hand[20].y > hand[18].y;
-            const allFingersCurled = indexCurled && middleCurled && ringCurled && pinkyCurled;
-
-            const isThumbsUp = hand[4].y < (hand[3].y - 0.08) && allFingersCurled;
-            const isThumbsDown = hand[4].y > (hand[3].y + 0.08) && allFingersCurled;
-
-            const hint = document.getElementById('gesture-hint');
+        // SPRINT 4: GESTURE ENGINE (Merged Logic)
+        function evaluateGestures(hand, confidence) {
             const player = document.getElementById('audio-player');
-
+            const time = player.currentTime;
             const now = Date.now();
-            const canToggle = (now - lastAudioToggle) > COOLDOWN_MS;
 
-            // --- THE BLACK HOLE (GRAB & EXPLODE) ---
-            const currentlyGrabbing = allFingersCurled && !isThumbsUp && !isThumbsDown;
+            // Update UI efficiently
+            uiConf.innerText = Math.round(confidence * 100) + "%";
 
-            if (currentlyGrabbing && !isGrabbing) {
-                isGrabbing = true; 
-                hint.innerText = "✊ SINGULARITY... (Hold Fist)";
-                hint.style.color = "#FBBC04"; 
-            } 
-            else if (!currentlyGrabbing && isGrabbing) {
-                // The moment you open your hand, trigger the explosion!
-                isGrabbing = false;
-                lastDropTime = now; // Put Vibe Drop on cooldown so it doesn't accidentally trigger
-                
-                hint.innerText = "💥 BOOM! (Released)";
-                hint.style.color = "#FF00FF";
-                
-                // Assign a violent outward velocity to every circle
-                fallingSpheres.forEach(s => {
-                    s.userData.state = 'exploding';
-                    s.userData.velX = (Math.random() - 0.5) * 2.0; // Fly left/right
-                    s.userData.velY = (Math.random() - 0.5) * 2.0; // Fly up/down
-                });
+            // Math
+            const wrist = hand[0];
+            const getDist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+            const fingersCurled = [8, 12, 16, 20].map(id => hand[id].y > hand[id-2].y);
+            
+            // Gestures
+            const isFist = fingersCurled.every(f => f);
+            const isPeace = !fingersCurled[0] && !fingersCurled[1] && fingersCurled[2] && fingersCurled[3];
+            const isPalmUp = hand[9].y < hand[0].y;
+            const isHandFlat = getDist(hand[8], wrist) > 0.4 && !isFist;
+
+            let currentState = "Tracking...";
+
+            // -- TEAM TIME GATES --
+
+            // Section 1: Earth (Daysi) 0s - 30s
+            if (time < 30 && isPalmUp && isHandFlat) {
+                assets.earth.visible = true;
+                assets.earth.material.color.lerp(new THREE.Color(0x4285F4), 0.05);
+                currentState = "Earth Active";
+                hintText.innerText = "🌎 Cupping Earth";
             }
 
-            // --- AUDIO CONTROLS ---
-            else if (isThumbsUp && canToggle) {
-                if (player.paused) player.play();
-                lastAudioToggle = now; 
-                hint.innerText = "▶️ MUSIC PLAYING (Thumbs Up)";
-                hint.style.color = "#34A853"; 
-            } 
-            else if (isThumbsDown && canToggle) {
-                if (!player.paused) player.pause();
-                lastAudioToggle = now; 
-                hint.innerText = "⏸️ MUSIC PAUSED (Thumbs Down)";
-                hint.style.color = "#EA4335"; 
-            } 
-            else if (!isGrabbing) {
-                if (!canToggle) {
-                    hint.innerText = "⏳ Processing...";
-                    hint.style.color = "#FBBC04"; 
-                } else if (!player.paused) {
-                    hint.innerText = "Listening: 'Luther' by Kendrick Lamar";
-                    hint.style.color = "#ffffff";
+            // Section 2: Enemies & Fire (Pablo/Aaliyah) 0:40 - 0:49
+            if (time >= 40 && time <= 49.5) {
+                assets.enemies.visible = true;
+                if (isPeace) {
+                    currentState = "Fire Attack";
+                    hintText.innerText = "🔥 Peace Attack!";
+                    assets.enemies.children.forEach(e => {
+                        e.scale.multiplyScalar(0.9);
+                        e.material.color.set(0xff4500);
+                    });
+                    if (time > 48.5) confetti({ particleCount: 5, spread: 80, origin: { y: 0.6 } });
                 } else {
-                    hint.innerText = "System Ready: Thumbs Up to Play";
-                    hint.style.color = "#aaaaaa";
+                    hintText.innerText = "👾 Enemies approaching...";
+                }
+            } else {
+                assets.enemies.visible = false;
+            }
+
+            // Section 5: Flower (Annuria) 1:00 - 1:40
+            if (time > 60 && time < 100) {
+                if (isPeace) {
+                    assets.flower.visible = true; assets.flower.scale.set(1, 1, 1);
+                    currentState = "Growing"; hintText.innerText = "🌸 Flower Growing";
+                } else if (isFist && assets.flower.visible) {
+                    assets.flower.scale.set(1, 0.2, 1);
+                    currentState = "Withering"; hintText.innerText = "🥀 Flower Withering";
                 }
             }
 
-            // --- VIBE DROP LOGIC ---
-            const wrist = hand[0];
-            const indexExtended = getDistance(hand[8], wrist) > getDistance(hand[6], wrist);
-            const middleExtended = getDistance(hand[12], wrist) > getDistance(hand[10], wrist);
-            const ringExtended = getDistance(hand[16], wrist) > getDistance(hand[14], wrist);
-            const pinkyExtended = getDistance(hand[20], wrist) > getDistance(hand[18], wrist);
-
-            const isHandFlat = indexExtended && middleExtended && ringExtended && pinkyExtended;
-
-            const currentPalmY = hand[9].y;
-            const swipeVelocity = currentPalmY - lastPalmY; 
-        
-            if (isHandFlat && swipeVelocity > 0.03 && (now - lastDropTime) > 1000) {
-                spawnVibeSpheres();
-                lastDropTime = now;
-                hint.innerText = "✨ THE VIBE DROP ✨";
-                hint.style.color = "#FF00FF";
+            // -- NATE'S BLACK HOLE (Always Active Core) --
+            if (isFist && !isPeace && !isGrabbing) {
+                isGrabbing = true;
+                currentState = "Singularity"; hintText.innerText = "✊ SINGULARITY";
+            } else if (!isFist && isGrabbing) {
+                isGrabbing = false;
+                currentState = "Explosion"; hintText.innerText = "💥 BOOM";
+                fallingSpheres.forEach(s => {
+                    s.userData.state = 'exploding';
+                    s.userData.velX = (Math.random() - 0.5) * 2;
+                    s.userData.velY = (Math.random() - 0.5) * 2;
+                });
             }
 
-            lastPalmY = currentPalmY;
+            // Vibe Drop
+            if (isHandFlat && (hand[9].y - lastPalmY) > 0.04 && (now - lastDropTime) > 1500) {
+                spawnVibeSpheres(); lastDropTime = now;
+                currentState = "Vibe Drop"; hintText.innerText = "✨ VIBE DROP";
+            }
+            lastPalmY = hand[9].y;
 
-            // Update telemetry
-            document.getElementById('val-x').innerText = (0.5 - hand[9].x).toFixed(2);
-            document.getElementById('val-thumb').innerText = hand[4].y.toFixed(2);
+            uiState.innerText = currentState;
         }
 
-        // 3. MEDIAPIPE SENSORS
-        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+        function spawnVibeSpheres() {
+            fallingSpheres.forEach(s => { scene.remove(s); s.geometry.dispose(); s.material.dispose(); });
+            fallingSpheres.length = 0;
+            const colors = [0x4285F4, 0xEA4335, 0xFBBC04, 0x34A853];
+            for(let i=0; i<250; i++){
+                const mat = new THREE.MeshBasicMaterial({color: new THREE.Color(colors[i%4]).lerp(new THREE.Color(0x888888), 0.8)});
+                const s = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), mat);
+                s.position.set((Math.random()-0.5)*15, 8+Math.random()*8, 0);
+                s.userData = { state: 'falling', velY: -0.15, floorY: -4 + (Math.floor(i/20)*0.4) };
+                scene.add(s);
+                fallingSpheres.push(s);
+            }
+        }
 
-        hands.onResults(res => {
-            if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
-                evaluateGestures(res.multiHandLandmarks[0]);
-                document.getElementById('val-conf').innerText = "0.98";
-            } else {
-                document.getElementById('gesture-hint').innerText = "Sensors Active // Show Your Hand To Camera";
-                document.getElementById('val-conf').innerText = "0.00";
+        // Camera Setup
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7 });
+        hands.onResults(res => { 
+            if(res.multiHandLandmarks[0]) {
+                // Pass confidence score to UI
+                const conf = res.multiHandedness[0] ? res.multiHandedness[0].score : 0;
+                evaluateGestures(res.multiHandLandmarks[0], conf); 
             }
         });
 
-        // 4. WEBCAM & UI INITIALIZATION
         const video = document.getElementById('webcam-monitor');
-        const startBtn = document.getElementById('start-btn');
-        const gate = document.getElementById('permission-gate');
-
-        startBtn.addEventListener('click', () => {
-            startBtn.innerText = "Powering Up Engines...";
-            startBtn.disabled = true;
-
-            const cam = new Camera(video, {
-                onFrame: async () => { await hands.send({ image: video }); },
-                width: 1280, height: 720
-            });
-
+        document.getElementById('start-btn').onclick = () => {
+            const cam = new Camera(video, { onFrame: async () => { await hands.send({image: video}); }, width: 1280, height: 720 });
             cam.start().then(() => {
-                gate.style.opacity = '0';
-                setTimeout(() => {
-                    gate.classList.add('hidden');
-                    video.style.display = 'block';
-                    document.getElementById('ui-layer').style.display = 'block';
-                    document.getElementById('data-monitor').style.display = 'block';
-                }, 1000);
-            }).catch(err => { console.error("Hardware Error:", err); });
-        });
+                document.getElementById('permission-gate').style.display = 'none';
+                document.getElementById('ui-layer').style.display = 'block';
+                document.getElementById('data-monitor').style.display = 'block';
+                video.style.display = 'block';
+            });
+        };
 
         document.getElementById('copy-url-btn').onclick = () => {
             navigator.clipboard.writeText(window.location.href);
-            document.getElementById('copy-url-btn').innerText = "URL COPIED";
+            document.getElementById('copy-url-btn').innerText = "COPIED!";
         };
 
-        // --- AUDIO RESTART LOGIC ---
-        document.getElementById('audio-player').addEventListener('ended', (e) => {
-            e.target.currentTime = 0; 
-            document.getElementById('gesture-hint').innerText = "Track Ended. Thumbs Up to Restart!";
-            document.getElementById('gesture-hint').style.color = "#aaaaaa";
-        });
-
-        // 5. THE ANIMATION LOOP
+        // SPRINT 5: PRODUCTION MANAGERS, SYNC THE WORLD BEAT
         let time = 0;
+        const uiPulseElement = document.getElementById('val-pulse');
+
         function animate() {
             requestAnimationFrame(animate);
             
-            // Dashboard Pulse Telemetry
+            // Pulse Dashboard Telemetry
             time += 0.02; 
             const pulse = 1 + Math.sin(time) * 0.1;
-            document.getElementById('val-pulse').innerText = pulse.toFixed(3);
+            uiPulseElement.innerText = pulse.toFixed(3);
 
-            // --- UPGRADED PHYSICS ENGINE ---
-            for (let i = fallingSpheres.length - 1; i >= 0; i--) {
-                let s = fallingSpheres[i];
-                
-                // 1. THE SUCTION OVERRIDE: If you make a fist, pull EVERYTHING to the center
-                if (isGrabbing) {
-                    s.userData.state = 'grabbed';
+            // Object Beat Sync
+            Object.values(assets).forEach(mesh => {
+                if (mesh && mesh.visible && mesh !== assets.enemies) { // Keep enemies from spinning wildly
+                    mesh.rotation.y += 0.005;
                 }
+            });
 
-                if (s.userData.state === 'falling') {
-                    // Normal falling logic
-                    s.position.y += s.userData.velocityY;
-                    if (s.position.y < s.userData.floorY) {
-                        s.position.y = s.userData.floorY;
-                        s.userData.velocityY = 0; 
-                    }
-                } 
-                else if (s.userData.state === 'grabbed') {
-                    // Sucks them dynamically toward the center (X = 0, Y = 4)
-                    s.position.x += (0 - s.position.x) * 0.1;
-                    s.position.y += (4 - s.position.y) * 0.1;
-                } 
-                else if (s.userData.state === 'exploding') {
-                    // Apply the violent explosion velocity
-                    s.position.x += s.userData.velX;
+            // Physics Engine (Nate)
+            for(let i=fallingSpheres.length-1; i>=0; i--){
+                let s = fallingSpheres[i];
+                if(isGrabbing) s.userData.state = 'grabbed';
+                if(s.userData.state === 'falling'){
                     s.position.y += s.userData.velY;
-                    
-                    // GARBAGE COLLECTION: Delete them permanently once they fly off screen
-                    if (s.position.x > 25 || s.position.x < -25 || s.position.y > 20 || s.position.y < -10) {
-                        scene.remove(s);
-                        s.geometry.dispose();
-                        s.material.dispose();
-                        fallingSpheres.splice(i, 1);
-                    }
+                    if(s.position.y < s.userData.floorY) s.position.y = s.userData.floorY;
+                } else if(s.userData.state === 'grabbed'){
+                    s.position.x += (0 - s.position.x) * 0.1;
+                    s.position.y += (3 - s.position.y) * 0.1;
+                } else if(s.userData.state === 'exploding'){
+                    s.position.x += s.userData.velX; s.position.y += s.userData.velY;
+                    if(Math.abs(s.position.x) > 20 || Math.abs(s.position.y) > 15) { scene.remove(s); fallingSpheres.splice(i,1); }
                 }
             }
 
-            // --- STOPWATCH UPDATE ---
+            // Stopwatch
             const player = document.getElementById('audio-player');
-            const timerDisplay = document.getElementById('song-timer');
-            
-            const currentSeconds = player.currentTime;
-            timerDisplay.innerText = currentSeconds.toFixed(1) + "s";
+            document.getElementById('song-timer').innerText = player.currentTime.toFixed(1) + "s";
 
             renderer.render(scene, camera);
         }
         animate();
 
-        // Responsive Window Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
