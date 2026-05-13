@@ -98,10 +98,11 @@
         // Add all to scene hidden
         Object.values(assets).forEach(obj => { obj.visible = false; scene.add(obj); });
 
-        // Nate's Physics Data
+        // Nate's Physics & State Data
         let isGrabbing = false;
         let lastDropTime = 0;
         let lastPalmY = 0;
+        let confettiFired = false; // Bug fix: Prevent confetti spam
         const fallingSpheres = [];
 
         // Efficient UI Caching
@@ -134,11 +135,15 @@
             // -- TEAM TIME GATES --
 
             // Section 1: Earth (Daysi) 0s - 30s
-            if (time < 30 && isPalmUp && isHandFlat) {
-                assets.earth.visible = true;
-                assets.earth.material.color.lerp(new THREE.Color(0x4285F4), 0.05);
-                currentState = "Earth Active";
-                hintText.innerText = "🌎 Cupping Earth";
+            if (time < 30) {
+                if (isPalmUp && isHandFlat) {
+                    assets.earth.visible = true;
+                    assets.earth.material.color.lerp(new THREE.Color(0x4285F4), 0.05);
+                    currentState = "Earth Active";
+                    hintText.innerText = "🌎 Cupping Earth";
+                }
+            } else {
+                assets.earth.visible = false;
             }
 
             // Section 2: Enemies & Fire (Pablo/Aaliyah) 0:40 - 0:49
@@ -149,34 +154,54 @@
                     hintText.innerText = "🔥 Peace Attack!";
                     assets.enemies.children.forEach(e => {
                         e.scale.multiplyScalar(0.9);
-                        e.material.color.set(0xff4500);
+                        e.material.color.set(0xff4500); // Fire Color
                     });
-                    if (time > 48.5) confetti({ particleCount: 5, spread: 80, origin: { y: 0.6 } });
+                    
+                    // Fire Confetti exactly once
+                    if (time > 48.5 && !confettiFired) {
+                        confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+                        confettiFired = true;
+                    }
                 } else {
                     hintText.innerText = "👾 Enemies approaching...";
                 }
             } else {
                 assets.enemies.visible = false;
+                confettiFired = false; // Reset Confetti
+                
+                // Bug fix: Reset Enemies to normal scale/color
+                assets.enemies.children.forEach(e => {
+                    e.scale.set(1, 1, 1);
+                    e.material.color.set(0xEA4335); 
+                });
             }
 
             // Section 5: Flower (Annuria) 1:00 - 1:40
             if (time > 60 && time < 100) {
                 if (isPeace) {
-                    assets.flower.visible = true; assets.flower.scale.set(1, 1, 1);
-                    currentState = "Growing"; hintText.innerText = "🌸 Flower Growing";
+                    assets.flower.visible = true; 
+                    assets.flower.scale.set(1, 1, 1);
+                    currentState = "Growing"; 
+                    hintText.innerText = "🌸 Flower Growing";
                 } else if (isFist && assets.flower.visible) {
                     assets.flower.scale.set(1, 0.2, 1);
-                    currentState = "Withering"; hintText.innerText = "🥀 Flower Withering";
+                    currentState = "Withering"; 
+                    hintText.innerText = "🥀 Flower Withering";
                 }
+            } else {
+                assets.flower.visible = false;
             }
 
             // -- NATE'S BLACK HOLE (Always Active Core) --
-            if (isFist && !isPeace && !isGrabbing) {
+            if (isFist && !isPeace && !isGrabbing && (time < 60 || time > 100)) { 
+                // Ensuring fist doesn't trigger black hole during flower withering phase
                 isGrabbing = true;
-                currentState = "Singularity"; hintText.innerText = "✊ SINGULARITY";
+                currentState = "Singularity"; 
+                hintText.innerText = "✊ SINGULARITY";
             } else if (!isFist && isGrabbing) {
                 isGrabbing = false;
-                currentState = "Explosion"; hintText.innerText = "💥 BOOM";
+                currentState = "Explosion"; 
+                hintText.innerText = "💥 BOOM";
                 fallingSpheres.forEach(s => {
                     s.userData.state = 'exploding';
                     s.userData.velX = (Math.random() - 0.5) * 2;
@@ -184,10 +209,12 @@
                 });
             }
 
-            // Vibe Drop
+            // Vibe Drop (Swipe down flat hand)
             if (isHandFlat && (hand[9].y - lastPalmY) > 0.04 && (now - lastDropTime) > 1500) {
-                spawnVibeSpheres(); lastDropTime = now;
-                currentState = "Vibe Drop"; hintText.innerText = "✨ VIBE DROP";
+                spawnVibeSpheres(); 
+                lastDropTime = now;
+                currentState = "Vibe Drop"; 
+                hintText.innerText = "✨ VIBE DROP";
             }
             lastPalmY = hand[9].y;
 
@@ -213,7 +240,6 @@
         hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7 });
         hands.onResults(res => { 
             if(res.multiHandLandmarks[0]) {
-                // Pass confidence score to UI
                 const conf = res.multiHandedness[0] ? res.multiHandedness[0].score : 0;
                 evaluateGestures(res.multiHandLandmarks[0], conf); 
             }
@@ -236,20 +262,20 @@
         };
 
         // SPRINT 5: PRODUCTION MANAGERS, SYNC THE WORLD BEAT
-        let time = 0;
+        let timeCount = 0;
         const uiPulseElement = document.getElementById('val-pulse');
 
         function animate() {
             requestAnimationFrame(animate);
             
             // Pulse Dashboard Telemetry
-            time += 0.02; 
-            const pulse = 1 + Math.sin(time) * 0.1;
+            timeCount += 0.02; 
+            const pulse = 1 + Math.sin(timeCount) * 0.1;
             uiPulseElement.innerText = pulse.toFixed(3);
 
             // Object Beat Sync
             Object.values(assets).forEach(mesh => {
-                if (mesh && mesh.visible && mesh !== assets.enemies) { // Keep enemies from spinning wildly
+                if (mesh && mesh.visible && mesh !== assets.enemies) { 
                     mesh.rotation.y += 0.005;
                 }
             });
@@ -258,6 +284,7 @@
             for(let i=fallingSpheres.length-1; i>=0; i--){
                 let s = fallingSpheres[i];
                 if(isGrabbing) s.userData.state = 'grabbed';
+                
                 if(s.userData.state === 'falling'){
                     s.position.y += s.userData.velY;
                     if(s.position.y < s.userData.floorY) s.position.y = s.userData.floorY;
@@ -265,8 +292,16 @@
                     s.position.x += (0 - s.position.x) * 0.1;
                     s.position.y += (3 - s.position.y) * 0.1;
                 } else if(s.userData.state === 'exploding'){
-                    s.position.x += s.userData.velX; s.position.y += s.userData.velY;
-                    if(Math.abs(s.position.x) > 20 || Math.abs(s.position.y) > 15) { scene.remove(s); fallingSpheres.splice(i,1); }
+                    s.position.x += s.userData.velX; 
+                    s.position.y += s.userData.velY;
+                    
+                    // Garbage Collection
+                    if (s.position.x > 25 || s.position.x < -25 || s.position.y > 20 || s.position.y < -10) { 
+                        scene.remove(s); 
+                        s.geometry.dispose();
+                        s.material.dispose();
+                        fallingSpheres.splice(i,1); 
+                    }
                 }
             }
 
