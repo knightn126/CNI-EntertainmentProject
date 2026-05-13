@@ -13,28 +13,18 @@
 
     <style>
         :root {
-            /* Google Brand Palette */
-            --google-blue: #4285F4;
-            --google-red: #EA4335;
-            --google-yellow: #FBBC04;
-            --google-green: #34A853;
-            --brand-dark: #0a0a0a;
-            --ui-glass: rgba(255, 255, 255, 0.05);
+            --google-blue: #4285F4; --google-red: #EA4335;
+            --google-yellow: #FBBC04; --google-green: #34A853;
+            --brand-dark: #0a0a0a; --ui-glass: rgba(255, 255, 255, 0.05);
             --ui-border: rgba(255, 255, 255, 0.1);
         }
-
         body { margin: 0; background-color: var(--brand-dark); overflow: hidden; font-family: 'Google Sans', sans-serif; color: white; }
-
         #permission-gate { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
         button { background: var(--google-blue); color: white; border: none; padding: 14px 32px; font-size: 14px; cursor: pointer; border-radius: 8px; font-weight: bold; }
-
-        #webcam-monitor { position: absolute; top: 20px; left: 20px; width: 220px; z-index: 100; border: 1px solid var(--ui-border); border-radius: 12px; transform: scaleX(-1); display: none; }
-
-        /* The Team's Data Monitor */
+        #webcam-monitor { position: absolute; top: 20px; left: 20px; width: 220px; z-index: 100; border: 1px solid var(--ui-border); border-radius: 12px; transform: scaleX(-1); display: block; }
         #data-monitor { position: absolute; top: 20px; right: 20px; width: 250px; background: var(--ui-glass); backdrop-filter: blur(10px); border: 1px solid var(--ui-border); border-radius: 12px; padding: 20px; z-index: 100; display: none; font-size: 12px; }
         .data-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
         .data-val { font-family: monospace; color: var(--google-yellow); }
-
         #ui-layer { position: absolute; bottom: 40px; width: 100%; text-align: center; z-index: 10; pointer-events: none; display: none; }
         #song-timer { font-size: 48px; font-weight: 700; margin-bottom: 15px; font-variant-numeric: tabular-nums; }
         .status-pill { display: inline-block; background: var(--ui-glass); border: 1px solid var(--ui-border); backdrop-filter: blur(10px); padding: 10px 24px; border-radius: 100px; font-size: 12px; text-transform: uppercase; }
@@ -55,18 +45,17 @@
         <div class="data-row"><span>Pulse:</span> <span class="data-val" id="val-pulse">0.00</span></div>
         <div class="data-row"><span>Hand Conf:</span> <span class="data-val" id="val-conf">0%</span></div>
         <div class="data-row"><span>Active Gesture:</span> <span class="data-val" id="val-state" style="color: var(--google-green);">Scanning...</span></div>
-        <button id="copy-url-btn" style="width: 100%; margin-top: 15px; padding: 8px; font-size: 10px; pointer-events: auto;">COPY PROJECT URL</button>
+        <div class="data-row"><span>Active Scene:</span> <span class="data-val" id="val-scene" style="color: var(--google-yellow);">IDLE</span></div>
     </div>
 
     <div id="ui-layer">
         <div id="song-timer">0.0s</div>
-        <audio id="audio-player" src="music/lutherS3.mp3" controls style="margin-bottom: 15px; border-radius: 50px; pointer-events: auto;"></audio>
+        <audio id="audio-player" src="music/lutherAudio.mp3" controls style="margin-bottom: 15px; border-radius: 50px; pointer-events: auto;"></audio>
         <br>
         <div class="status-pill" id="gesture-hint">Waiting for input...</div>
     </div>
 
     <script>
-        // SPRINT 2: BUILD THE UNIVERSE
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x060606);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -75,173 +64,96 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // SPRINT 3: 3D ASSETS (Team's Master List)
+        // ASSETS
         const assets = {
-            earth: new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), new THREE.MeshBasicMaterial({ color: 0x333333 })),
-            enemies: new THREE.Group(),
-            flower: new THREE.Group()
+            ground: new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 10), 
+                new THREE.MeshBasicMaterial({ color: 0x1a2e1a, side: THREE.DoubleSide })
+            ),
+            flowers: new THREE.Group()
         };
+        assets.ground.rotation.x = Math.PI / 2;
+        assets.ground.position.y = -4;
+        scene.add(assets.ground);
 
-        // Setup Enemies (Pablo/Aaliyah)
-        for(let i=0; i<5; i++) {
-            const e = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.2), new THREE.MeshBasicMaterial({color: 0xEA4335}));
-            e.position.set((i-2)*1.5, 2, 0);
-            assets.enemies.add(e);
+        function createFlower(finalColor) {
+            const f = new THREE.Group();
+            const stemGroup = new THREE.Group();
+            const stemMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 2.5), new THREE.MeshBasicMaterial({color: 0x2d5a27}));
+            stemMesh.position.y = 1.25; 
+            stemGroup.add(stemMesh);
+            f.add(stemGroup);
+
+            const petalGroup = new THREE.Group();
+            for(let i=0; i<4; i++) {
+                const p = new THREE.Mesh(new THREE.CircleGeometry(0.4, 32), new THREE.MeshBasicMaterial({color: 0x2d5a27})); 
+                p.rotation.z = (Math.PI / 2) * i;
+                p.scale.x = 0.5;
+                petalGroup.add(p);
+            }
+            f.add(petalGroup);
+
+            f.userData = { stem: stemGroup, petals: petalGroup, finalColor: new THREE.Color(finalColor) };
+            return f;
         }
 
-        // Setup Flower (Annuria)
-        assets.flower.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5), new THREE.MeshBasicMaterial({color: 0x34A853})));
-        const petal = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), new THREE.MeshBasicMaterial({color: 0xFBBC04}));
-        petal.position.y = 0.8;
-        assets.flower.add(petal);
+        const flowerLeft = createFlower(0xFF69B4); flowerLeft.position.set(-3, -4, 0.1);
+        const flowerRight = createFlower(0x00FFFF); flowerRight.position.set(3, -4, 0.1);
+        assets.flowers.add(flowerLeft, flowerRight);
 
-        // Add all to scene hidden
-        Object.values(assets).forEach(obj => { obj.visible = false; scene.add(obj); });
+        Object.values(assets).forEach(obj => { if(obj !== assets.ground) obj.visible = false; scene.add(obj); });
 
-        // Nate's Physics & State Data
-        let isGrabbing = false;
-        let lastDropTime = 0;
-        let lastPalmY = 0;
-        let confettiFired = false; // Bug fix: Prevent confetti spam
+        // Physics & Engine Data
         const fallingSpheres = [];
+        const rainDrops = []; 
+        const szaBalls = []; 
+        
+        let isRaining = false;
+        let szaStage = 0; 
+        let hasSpawnedWall = false; // Prevents wall from spawning infinitely
+        
+        const TIMELINE = [
+            { id: "SECTION_1", start: 0, end: 25, name: "The B&W World" }, 
+            { id: "SECTION_2", start: 25, end: 50, name: "Harsh Reality" }, 
+            { id: "SECTION_3_KENDRICK", start: 50, end: 54, name: "Gather & Burst" }, // Ends at 0:54
+            { id: "SECTION_3_SZA", start: 54, end: 120, name: "Concrete Flowers" },   // Starts at 0:54 
+            { id: "SECTION_5", start: 155, end: 180, name: "Perfect World" }  
+        ];
 
-        // Efficient UI Caching
+        let currentScene = "IDLE"; 
         const uiState = document.getElementById('val-state');
         const uiConf = document.getElementById('val-conf');
         const hintText = document.getElementById('gesture-hint');
 
-        // SPRINT 4: GESTURE ENGINE (Merged Logic)
-        function evaluateGestures(hand, confidence) {
-            const player = document.getElementById('audio-player');
-            const time = player.currentTime;
-            const now = Date.now();
-
-            // Update UI efficiently
-            uiConf.innerText = Math.round(confidence * 100) + "%";
-
-            // Math
-            const wrist = hand[0];
-            const getDist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
-            const fingersCurled = [8, 12, 16, 20].map(id => hand[id].y > hand[id-2].y);
-            
-            // Gestures
-            const isFist = fingersCurled.every(f => f);
-            const isPeace = !fingersCurled[0] && !fingersCurled[1] && fingersCurled[2] && fingersCurled[3];
-            const isPalmUp = hand[9].y < hand[0].y;
-            const isHandFlat = getDist(hand[8], wrist) > 0.4 && !isFist;
-
-            let currentState = "Tracking...";
-
-            // -- TEAM TIME GATES --
-
-            // Section 1: Earth (Daysi) 0s - 30s
-            if (time < 30) {
-                if (isPalmUp && isHandFlat) {
-                    assets.earth.visible = true;
-                    assets.earth.material.color.lerp(new THREE.Color(0x4285F4), 0.05);
-                    currentState = "Earth Active";
-                    hintText.innerText = "🌎 Cupping Earth";
-                }
-            } else {
-                assets.earth.visible = false;
-            }
-
-            // Section 2: Enemies & Fire (Pablo/Aaliyah) 0:40 - 0:49
-            if (time >= 40 && time <= 49.5) {
-                assets.enemies.visible = true;
-                if (isPeace) {
-                    currentState = "Fire Attack";
-                    hintText.innerText = "🔥 Peace Attack!";
-                    assets.enemies.children.forEach(e => {
-                        e.scale.multiplyScalar(0.9);
-                        e.material.color.set(0xff4500); // Fire Color
-                    });
-                    
-                    // Fire Confetti exactly once
-                    if (time > 48.5 && !confettiFired) {
-                        confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
-                        confettiFired = true;
-                    }
-                } else {
-                    hintText.innerText = "👾 Enemies approaching...";
-                }
-            } else {
-                assets.enemies.visible = false;
-                confettiFired = false; // Reset Confetti
-                
-                // Bug fix: Reset Enemies to normal scale/color
-                assets.enemies.children.forEach(e => {
-                    e.scale.set(1, 1, 1);
-                    e.material.color.set(0xEA4335); 
-                });
-            }
-
-            // Section 5: Flower (Annuria) 1:00 - 1:40
-            if (time > 60 && time < 100) {
-                if (isPeace) {
-                    assets.flower.visible = true; 
-                    assets.flower.scale.set(1, 1, 1);
-                    currentState = "Growing"; 
-                    hintText.innerText = "🌸 Flower Growing";
-                } else if (isFist && assets.flower.visible) {
-                    assets.flower.scale.set(1, 0.2, 1);
-                    currentState = "Withering"; 
-                    hintText.innerText = "🥀 Flower Withering";
-                }
-            } else {
-                assets.flower.visible = false;
-            }
-
-            // -- NATE'S BLACK HOLE (Always Active Core) --
-            if (isFist && !isPeace && !isGrabbing && (time < 60 || time > 100)) { 
-                // Ensuring fist doesn't trigger black hole during flower withering phase
-                isGrabbing = true;
-                currentState = "Singularity"; 
-                hintText.innerText = "✊ SINGULARITY";
-            } else if (!isFist && isGrabbing) {
-                isGrabbing = false;
-                currentState = "Explosion"; 
-                hintText.innerText = "💥 BOOM";
-                fallingSpheres.forEach(s => {
-                    s.userData.state = 'exploding';
-                    s.userData.velX = (Math.random() - 0.5) * 2;
-                    s.userData.velY = (Math.random() - 0.5) * 2;
-                });
-            }
-
-            // Vibe Drop (Swipe down flat hand)
-            if (isHandFlat && (hand[9].y - lastPalmY) > 0.04 && (now - lastDropTime) > 1500) {
-                spawnVibeSpheres(); 
-                lastDropTime = now;
-                currentState = "Vibe Drop"; 
-                hintText.innerText = "✨ VIBE DROP";
-            }
-            lastPalmY = hand[9].y;
-
-            uiState.innerText = currentState;
+        // GESTURE ENGINE (Currently disabled from driving logic to test auto-timing)
+        function evaluateGestures(handsList) {
+            // Hands are tracked for UI only right now.
+            uiState.innerText = "AUTOPILOT MODE";
+            hintText.innerText = "⏳ Watch Animations Trigger via Song Timeline";
         }
 
-        function spawnVibeSpheres() {
-            fallingSpheres.forEach(s => { scene.remove(s); s.geometry.dispose(); s.material.dispose(); });
-            fallingSpheres.length = 0;
-            const colors = [0x4285F4, 0xEA4335, 0xFBBC04, 0x34A853];
-            for(let i=0; i<250; i++){
-                const mat = new THREE.MeshBasicMaterial({color: new THREE.Color(colors[i%4]).lerp(new THREE.Color(0x888888), 0.8)});
-                const s = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), mat);
-                s.position.set((Math.random()-0.5)*15, 8+Math.random()*8, 0);
-                s.userData = { state: 'falling', velY: -0.15, floorY: -4 + (Math.floor(i/20)*0.4) };
+        function spawnSzaWall() {
+            for(let i=0; i<150; i++) {
+                const s = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), new THREE.MeshBasicMaterial({color: 0x4285F4}));
+                let px = (Math.random()-0.5)*30;
+                let py = (Math.random()-0.5)*20 + 3;
+                s.position.set(px, py, -2);
+                s.userData = { origX: px, origY: py, velX: 0, velY: 0 };
                 scene.add(s);
-                fallingSpheres.push(s);
+                szaBalls.push(s);
             }
         }
 
-        // Camera Setup
         const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-        hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7 });
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
         hands.onResults(res => { 
-            if(res.multiHandLandmarks[0]) {
+            if(res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
                 const conf = res.multiHandedness[0] ? res.multiHandedness[0].score : 0;
-                evaluateGestures(res.multiHandLandmarks[0], conf); 
+                uiConf.innerText = Math.round(conf * 100) + "%";
+                evaluateGestures(res.multiHandLandmarks); 
+            } else {
+                uiConf.innerText = "0%";
             }
         });
 
@@ -252,73 +164,226 @@
                 document.getElementById('permission-gate').style.display = 'none';
                 document.getElementById('ui-layer').style.display = 'block';
                 document.getElementById('data-monitor').style.display = 'block';
-                video.style.display = 'block';
             });
         };
 
-        document.getElementById('copy-url-btn').onclick = () => {
-            navigator.clipboard.writeText(window.location.href);
-            document.getElementById('copy-url-btn').innerText = "COPIED!";
-        };
-
-        // SPRINT 5: PRODUCTION MANAGERS, SYNC THE WORLD BEAT
+        // RENDER LOOP
         let timeCount = 0;
-        const uiPulseElement = document.getElementById('val-pulse');
-
         function animate() {
             requestAnimationFrame(animate);
-            
-            // Pulse Dashboard Telemetry
             timeCount += 0.02; 
-            const pulse = 1 + Math.sin(timeCount) * 0.1;
-            uiPulseElement.innerText = pulse.toFixed(3);
+            document.getElementById('val-pulse').innerText = (1 + Math.sin(timeCount) * 0.1).toFixed(3);
+            const player = document.getElementById('audio-player');
+            let t = player.currentTime;
 
-            // Object Beat Sync
-            Object.values(assets).forEach(mesh => {
-                if (mesh && mesh.visible && mesh !== assets.enemies) { 
-                    mesh.rotation.y += 0.005;
-                }
-            });
-
-            // Physics Engine (Nate)
-            for(let i=fallingSpheres.length-1; i>=0; i--){
-                let s = fallingSpheres[i];
-                if(isGrabbing) s.userData.state = 'grabbed';
+            // 1. KENDRICK AUTOPILOT
+            if (currentScene === "SECTION_3_KENDRICK") {
+                let isEnding = (t >= 53.5); // Explode at 0:53.5
                 
-                if(s.userData.state === 'falling'){
-                    s.position.y += s.userData.velY;
-                    if(s.position.y < s.userData.floorY) s.position.y = s.userData.floorY;
-                } else if(s.userData.state === 'grabbed'){
-                    s.position.x += (0 - s.position.x) * 0.1;
-                    s.position.y += (3 - s.position.y) * 0.1;
-                } else if(s.userData.state === 'exploding'){
-                    s.position.x += s.userData.velX; 
-                    s.position.y += s.userData.velY;
-                    
-                    // Garbage Collection
-                    if (s.position.x > 25 || s.position.x < -25 || s.position.y > 20 || s.position.y < -10) { 
-                        scene.remove(s); 
-                        s.geometry.dispose();
-                        s.material.dispose();
-                        fallingSpheres.splice(i,1); 
+                // Creates a pump fake every 1 second. Pulls in for 0.5s, releases for 0.5s
+                let cycle = (t % 1.0); 
+                let autoPull = (cycle < 0.5); 
+
+                fallingSpheres.forEach(s => {
+                    if (s.userData.state === 'exploding') {
+                        s.position.x += s.userData.velX; s.position.y += s.userData.velY;
+                    } else if (isEnding) {
+                        // FINAL BURST
+                        s.userData.state = 'exploding';
+                        s.userData.velX = (Math.random() - 0.5) * 4;
+                        s.userData.velY = (Math.random() - 0.5) * 4;
+                    } else if (autoPull) {
+                        // PULL IN
+                        s.userData.state = 'grabbed';
+                        s.position.x += (0 - s.position.x) * 0.15; // Increased snap speed
+                        s.position.y += (3 - s.position.y) * 0.15;
+                    } else {
+                        // RELEASE
+                        s.userData.state = 'idle';
+                        s.position.x += (s.userData.origX - s.position.x) * 0.15;
+                        s.position.y += (s.userData.origY - s.position.y) * 0.15;
+                    }
+                });
+            }
+
+            // 2. SZA AUTOPILOT 
+            if (currentScene === "SECTION_3_SZA") {
+                
+                // EXACT TIMESTAMPS BASED ON SZA LYRICS
+                if (t >= 54 && t < 64) { 
+                    szaStage = 4; // Full Bloom Stage
+                    assets.flowers.visible = true; 
+                }
+                else if (t >= 64 && t < 69.5) { 
+                    szaStage = 6; // Slow Black Hole / Pooling Stage
+                    if (!hasSpawnedWall) { spawnSzaWall(); hasSpawnedWall = true; }
+                }
+                else if (t >= 69.5) { 
+                    szaStage = 7; // Big Explosion
+                }
+
+                // FLOWER LIFE CYCLE (Shrinks away during Black Hole)
+                assets.flowers.children.forEach(f => {
+                    if (!f.userData || !f.userData.stem) return;
+                    const { stem, petals, finalColor } = f.userData;
+
+                    let targetScale = 0, targetBloom = 0;
+                    if (szaStage === 4) { targetScale = 1.0; targetBloom = 1.0; } // Grow
+                    else if (szaStage >= 6) { targetScale = 0.0; targetBloom = 0.0; } // Wilt/Shrink to nothing
+
+                    stem.scale.y += (targetScale - stem.scale.y) * 0.05;
+                    petals.position.y = 2.5 * stem.scale.y;
+
+                    let currentBloom = petals.scale.x;
+                    currentBloom += (targetBloom - currentBloom) * 0.05;
+                    petals.scale.set(currentBloom, currentBloom, currentBloom);
+
+                    if (currentBloom > 0.1) petals.children.forEach(p => p.material.color.lerpColors(new THREE.Color(0x2d5a27), finalColor, currentBloom));
+                    else petals.children.forEach(p => p.material.color.set(0x2d5a27));
+                });
+
+                // BALL WALL LOGIC (The Slow Black Hole)
+                szaBalls.forEach(s => {
+                    if (szaStage === 6) {
+                        // Slow pool to center
+                        s.position.x += (0 - s.position.x) * 0.015;
+                        s.position.y += (3 - s.position.y) * 0.015;
+                    } else if (szaStage === 7) {
+                        // Big Explosion
+                        if (s.userData.velX === 0) {
+                            s.userData.velX = (Math.random() - 0.5) * 8; // Faster explosion
+                            s.userData.velY = (Math.random() - 0.5) * 8;
+                        }
+                        s.position.x += s.userData.velX;
+                        s.position.y += s.userData.velY;
+                    }
+                });
+            }
+
+            // 2. SZA AUTOPILOT 
+            if (currentScene === "SECTION_3_SZA") {
+                
+                // ADJUST THESE NUMBERS TO MATCH THE EXACT LYRICS/BEAT!
+                if (t >= 65 && t < 70) { szaStage = 1; assets.flowers.visible = true; }
+                else if (t >= 70 && t < 75) { szaStage = 2; isRaining = true; }
+                else if (t >= 75 && t < 80) { szaStage = 3; }
+                else if (t >= 80 && t < 85) { szaStage = 4; }
+                else if (t >= 85 && t < 100) { 
+                    szaStage = 5; // Wilt & Spawn wall
+                    if (!hasSpawnedWall) { spawnSzaWall(); hasSpawnedWall = true; }
+                }
+                else if (t >= 100 && t < 112) { szaStage = 6; } // Pooling
+                else if (t >= 112) { szaStage = 7; } // Explosion
+
+                // FLOWER LIFE CYCLE 
+                assets.flowers.children.forEach(f => {
+                    if (!f.userData || !f.userData.stem) return;
+                    const { stem, petals, finalColor } = f.userData;
+
+                    let targetScale = 0, targetBloom = 0;
+                    if (szaStage === 1 || szaStage === 2) targetScale = 0.1; 
+                    else if (szaStage === 3) targetScale = 1.0; 
+                    else if (szaStage === 4) { targetScale = 1.0; targetBloom = 1.0; } 
+                    else if (szaStage >= 5) { targetScale = 0.0; targetBloom = 0.0; } 
+
+                    stem.scale.y += (targetScale - stem.scale.y) * 0.05;
+                    petals.position.y = 2.5 * stem.scale.y;
+
+                    let currentBloom = petals.scale.x;
+                    currentBloom += (targetBloom - currentBloom) * 0.05;
+                    petals.scale.set(currentBloom, currentBloom, currentBloom);
+
+                    if (currentBloom > 0.1) petals.children.forEach(p => p.material.color.lerpColors(new THREE.Color(0x2d5a27), finalColor, currentBloom));
+                    else petals.children.forEach(p => p.material.color.set(0x2d5a27));
+                });
+
+                // RAIN LOGIC
+                if (isRaining && szaStage >= 2 && szaStage < 5 && Math.random() > 0.4) {
+                    const drop = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.6), new THREE.MeshBasicMaterial({color: 0x4285F4, transparent: true, opacity: 0.5}));
+                    drop.position.set((Math.random() - 0.5) * 15, 8, -1);
+                    scene.add(drop);
+                    rainDrops.push(drop);
+                }
+
+                // BALL WALL LOGIC
+                szaBalls.forEach(s => {
+                    if (szaStage === 5) {
+                        s.position.x += (s.userData.origX - s.position.x) * 0.05;
+                        s.position.y += (s.userData.origY - s.position.y) * 0.05;
+                    } else if (szaStage === 6) {
+                        s.position.x += (0 - s.position.x) * 0.015;
+                        s.position.y += (3 - s.position.y) * 0.015;
+                    } else if (szaStage === 7) {
+                        if (s.userData.velX === 0) {
+                            s.userData.velX = (Math.random() - 0.5) * 6;
+                            s.userData.velY = (Math.random() - 0.5) * 6;
+                        }
+                        s.position.x += s.userData.velX;
+                        s.position.y += s.userData.velY;
+                    }
+                });
+            }
+
+            // RAIN CLEANUP
+            for (let i = rainDrops.length - 1; i >= 0; i--) {
+                let drop = rainDrops[i];
+                drop.position.y -= 0.2;
+                if (drop.position.y < -4) { scene.remove(drop); drop.geometry.dispose(); drop.material.dispose(); rainDrops.splice(i, 1); }
+            }
+
+            // SCENE DIRECTOR
+            document.getElementById('song-timer').innerText = player.currentTime.toFixed(1) + "s";
+            let activeStage = "IDLE";
+            let activeStageName = "Waiting for music...";
+
+            if (!player.paused && player.currentTime > 0) {
+                for (let i = 0; i < TIMELINE.length; i++) {
+                    if (player.currentTime >= TIMELINE[i].start && player.currentTime < TIMELINE[i].end) {
+                        activeStage = TIMELINE[i].id;
+                        activeStageName = TIMELINE[i].name;
+                        break;
                     }
                 }
             }
 
-            // Stopwatch
-            const player = document.getElementById('audio-player');
-            document.getElementById('song-timer').innerText = player.currentTime.toFixed(1) + "s";
+            if (currentScene !== activeStage) {
+                currentScene = activeStage;
+                document.getElementById('val-scene').innerText = activeStageName;
+                
+                // Cleanup ALL Physics
+                fallingSpheres.forEach(s => { scene.remove(s); s.geometry.dispose(); s.material.dispose(); }); fallingSpheres.length = 0;
+                rainDrops.forEach(d => { scene.remove(d); d.geometry.dispose(); d.material.dispose(); }); rainDrops.length = 0;
+                szaBalls.forEach(d => { scene.remove(d); d.geometry.dispose(); d.material.dispose(); }); szaBalls.length = 0;
+
+                isRaining = false;
+                szaStage = 0;
+                hasSpawnedWall = false;
+                assets.flowers.visible = false;
+                
+                assets.flowers.children.forEach(f => {
+                    if (f.userData && f.userData.petals) {
+                        f.userData.petals.children.forEach(p => p.material.color.set(0x2d5a27));
+                        f.userData.petals.scale.set(0, 0, 0);
+                        f.userData.stem.scale.y = 0;
+                    }
+                });
+                
+                if (currentScene === "SECTION_3_KENDRICK") {
+                    for(let i=0; i<120; i++){
+                        const s = new THREE.Mesh(new THREE.CircleGeometry(0.4, 16), new THREE.MeshBasicMaterial({color: 0xFBBC04}));
+                        let px = (Math.random()-0.5)*25;
+                        let py = (Math.random()-0.5)*15 + 2;
+                        s.position.set(px, py, 0);
+                        s.userData = { state: 'idle', origX: px, origY: py };
+                        scene.add(s); 
+                        fallingSpheres.push(s);
+                    }
+                }
+            }
 
             renderer.render(scene, camera);
         }
         animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
-
 </html>
